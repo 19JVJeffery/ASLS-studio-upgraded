@@ -49,7 +49,7 @@ function comboFromEvent(e) {
   if (e.altKey) parts.push('Alt');
   // Use code for layout-independent keys (F1-F12, Space, ArrowUp …)
   // and key for printable characters.
-  let key = e.key;
+  let { key } = e;
   if (key === ' ') key = 'SPACE';
   if (key.length === 1) key = key.toUpperCase();
   parts.push(key);

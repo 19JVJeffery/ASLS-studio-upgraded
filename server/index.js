@@ -16,6 +16,7 @@ import { WebSocketServer } from 'ws';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import rateLimit from 'express-rate-limit';
 import showsRouter from './routes/shows.js';
 import fixturesRouter from './routes/fixtures.js';
 import outputsRouter from './routes/outputs.js';
@@ -37,6 +38,22 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
+// Rate limiting for API and remote control endpoints (local server –
+// generous limits to avoid false positives during rapid cue-stack use)
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 300,            // 300 requests per minute
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please slow down.' },
+});
+const remoteLimiter = rateLimit({
+  windowMs: 1000,      // 1 second
+  max: 30,             // up to 30 GO/BACK presses per second (plenty for show control)
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Serve static Vite build from /dist
 const distPath = path.resolve(__dirname, '..', 'dist');
 app.use(express.static(distPath));
@@ -46,13 +63,20 @@ const publicPath = path.resolve(__dirname, '..', 'public');
 app.use(express.static(publicPath));
 
 // REST API routes
-app.use('/api/shows', showsRouter);
-app.use('/api/fixtures', fixturesRouter);
-app.use('/api/outputs', outputsRouter);
-app.use('/remote', remoteRouter);
+app.use('/api/shows', apiLimiter, showsRouter);
+app.use('/api/fixtures', apiLimiter, fixturesRouter);
+app.use('/api/outputs', apiLimiter, outputsRouter);
+app.use('/remote', remoteLimiter, remoteRouter);
 
 // SPA fallback – any unknown GET goes to index.html
-app.get('*', (req, res) => {
+// Rate-limited to prevent filesystem abuse
+const staticLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.get('*', staticLimiter, (req, res) => {
   const indexFile = path.join(distPath, 'index.html');
   res.sendFile(indexFile, (err) => {
     if (err) {

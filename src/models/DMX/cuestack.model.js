@@ -22,12 +22,12 @@
 class CueStackEntry {
   constructor(data = {}) {
     this.order = data.order ?? 1;
-    this.cue = data.cue;           // reference to Cue / Scene / Effect instance
-    this.groupId = data.groupId;   // owning group ID (for re-hydration)
+    this.cue = data.cue; // reference to Cue / Scene / Effect instance
+    this.groupId = data.groupId; // owning group ID (for re-hydration)
     this.cueId = data.cueId ?? data.cue?.id;
-    this.inTime = data.inTime ?? null;     // null = use cue's own fade
+    this.inTime = data.inTime ?? null; // null = use cue's own fade
     this.outTime = data.outTime ?? null;
-    this.dwellTime = data.dwellTime ?? 0;  // 0 = manual GO
+    this.dwellTime = data.dwellTime ?? 0; // 0 = manual GO
     this.tracking = data.tracking ?? true;
     this.flags = {
       block: data.flags?.block ?? false,
@@ -160,7 +160,7 @@ class CueStack {
    */
   stop() {
     this._clearDwellTimer();
-    const active = this.active;
+    const { active } = this;
     if (active?.cue?.cue) active.cue.cue(false);
     this._pointer = -1;
   }

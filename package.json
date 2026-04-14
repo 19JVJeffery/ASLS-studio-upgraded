@@ -25,6 +25,7 @@
     "axios": "^0.26.1",
     "cors": "^2.8.6",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.3.2",
     "lodash": "^4.17.21",
     "mitt": "^3.0.1",
     "node-osc": "^11.4.0",

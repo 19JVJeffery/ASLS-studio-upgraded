@@ -43,7 +43,7 @@
           <uk-flex :gap="8">
             <uk-num-input
               v-model="channel.frequency"
-              :disabled="!channel.type"
+              :disabled="!channel.type || channel.bpmSync"
               :min="1"
               :max="100"
               label="Freq"
@@ -54,6 +54,26 @@
               :disabled="!channel.type"
               :max="3600"
               label="Phase"
+              @input="update"
+            />
+          </uk-flex>
+          <uk-flex :gap="8" style="align-items: center; margin-top: 4px">
+            <input
+              v-model="channel.bpmSync"
+              type="checkbox"
+              :disabled="!channel.type"
+              style="cursor:pointer"
+              @change="update"
+            />
+            <span style="font-size:11px; opacity:.8">BPM sync</span>
+            <uk-num-input
+              v-if="channel.bpmSync"
+              v-model="channel.bpmMultiplier"
+              :disabled="!channel.type"
+              :min="0.25"
+              :max="16"
+              label="x"
+              style="width:48px"
               @input="update"
             />
           </uk-flex>

@@ -62,13 +62,17 @@ router.get('/', (req, res) => {
 // ---------------------------------------------------------------------------
 router.get('/:manufacturer/:model', (req, res) => {
   const { manufacturer, model } = req.params;
-  // Security: strip any path traversal
-  const safeMfr = path.basename(manufacturer);
-  const safeModel = path.basename(model).replace(/\.json$/, '');
+  // Security: strip any path traversal and limit to safe filename characters
+  const safeMfr = path.basename(manufacturer).replace(/[^a-zA-Z0-9_\-]/g, '-');
+  const safeModel = path.basename(model).replace(/[^a-zA-Z0-9_\-]/g, '-').replace(/\.json$/, '');
 
   // Check public first, then user directory
   for (const base of [PUBLIC_FIXTURES, USER_FIXTURES]) {
     const fp = path.join(base, safeMfr, `${safeModel}.json`);
+    // Guard against directory traversal even after basename sanitisation
+    if (!fp.startsWith(base + path.sep) && fp !== base) {
+      continue; // eslint-disable-line no-continue
+    }
     if (fs.existsSync(fp)) {
       return res.json(JSON.parse(fs.readFileSync(fp, 'utf8')));
     }
@@ -82,14 +86,30 @@ router.get('/:manufacturer/:model', (req, res) => {
 router.post('/import', (req, res) => {
   try {
     const fixture = req.body;
-    if (!fixture || !fixture.manufacturer || !fixture.name) {
+    if (!fixture || typeof fixture.manufacturer !== 'string' || typeof fixture.name !== 'string') {
       return res.status(400).json({ error: 'Invalid OFL fixture JSON' });
     }
-    const mfr = fixture.manufacturer.replace(/[^a-zA-Z0-9_\-]/g, '-').toLowerCase();
-    const model = fixture.name.replace(/[^a-zA-Z0-9_\-]/g, '-').toLowerCase();
-    const mfrDir = path.join(USER_FIXTURES, mfr);
+    // Sanitise to only safe characters so the values cannot escape the target dir
+    const mfr = fixture.manufacturer.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
+    const model = fixture.name.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
+
+    if (!mfr || !model) {
+      return res.status(400).json({ error: 'Invalid manufacturer or model name' });
+    }
+
+    // Resolve and verify the target paths stay inside USER_FIXTURES
+    const mfrDir = path.resolve(USER_FIXTURES, mfr);
+    const targetFile = path.resolve(mfrDir, `${model}.json`);
+
+    if (!mfrDir.startsWith(USER_FIXTURES + path.sep) && mfrDir !== USER_FIXTURES) {
+      return res.status(400).json({ error: 'Invalid path' });
+    }
+    if (!targetFile.startsWith(mfrDir + path.sep) && targetFile !== mfrDir) {
+      return res.status(400).json({ error: 'Invalid path' });
+    }
+
     if (!fs.existsSync(mfrDir)) fs.mkdirSync(mfrDir, { recursive: true });
-    fs.writeFileSync(path.join(mfrDir, `${model}.json`), JSON.stringify(fixture, null, 2));
+    fs.writeFileSync(targetFile, JSON.stringify(fixture, null, 2));
     res.json({ ok: true, manufacturer: mfr, model });
   } catch (err) {
     res.status(500).json({ error: err.message });

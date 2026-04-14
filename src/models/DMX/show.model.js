@@ -5,6 +5,7 @@ import {
 import {
   parseStringPromise as XMLParse,
 } from 'xml2js';
+import ServerWS from '@/plugins/server-ws';
 import {
   ProxifySingleton,
 } from '../utils/proxify.utils';
@@ -16,7 +17,6 @@ import FixturePool from './fixture.pool.model';
 import Live from './live.model';
 import OutputPool from './output.pool.model';
 import CueStack from './cuestack.model';
-import ServerWS from '@/plugins/server-ws';
 
 const LOCALSTORAGE_SHOWFILE_KEY = 'ASLS_STUDIO_SHOWFILE';
 const DEFAULT_PROJECT_NAME = 'new_project.asls';

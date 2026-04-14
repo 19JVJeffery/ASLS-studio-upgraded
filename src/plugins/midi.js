@@ -50,12 +50,18 @@ class MidiController extends EventEmitter {
 
   _handleMessage(event) {
     const [status, data1, data2] = event.data;
+    // eslint-disable-next-line no-bitwise
     const type = status & 0xF0;
+    // eslint-disable-next-line no-bitwise
     const channel = (status & 0x0F) + 1; // 1-16
 
-    this.emit('message', { status, type, channel, data1, data2 });
+    this.emit('message', {
+      status, type, channel, data1, data2,
+    });
 
-    this._bindings.forEach(({ msgType, ch, key, handler }) => {
+    this._bindings.forEach(({
+      msgType, ch, key, handler,
+    }) => {
       if (msgType === type && (ch === 0 || ch === channel) && (key < 0 || key === data1)) {
         handler({ channel, value: data2, note: data1 });
       }
@@ -70,7 +76,9 @@ class MidiController extends EventEmitter {
    * @param {Function} handler
    */
   onNote(channel, note, handler) {
-    this._bindings.push({ msgType: 0x90, ch: channel, key: note, handler });
+    this._bindings.push({
+      msgType: 0x90, ch: channel, key: note, handler,
+    });
   }
 
   /**
@@ -81,7 +89,9 @@ class MidiController extends EventEmitter {
    * @param {Function} handler
    */
   onCC(channel, controller, handler) {
-    this._bindings.push({ msgType: 0xB0, ch: channel, key: controller, handler });
+    this._bindings.push({
+      msgType: 0xB0, ch: channel, key: controller, handler,
+    });
   }
 
   /**

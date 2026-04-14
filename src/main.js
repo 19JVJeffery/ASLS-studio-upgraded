@@ -6,6 +6,7 @@ import EventBus from '@/plugins/eventbus';
 import '@/assets/styles/global.css';
 import '@/assets/styles/fonts.css';
 import ShowSingleton from '@/singletons/show.singleton';
+import MidiController from '@/plugins/midi';
 import router from './plugins/router';
 import App from './App.vue';
 
@@ -26,12 +27,25 @@ try {
   app.config.globalProperties.$show = reactive(ShowSingleton);
   app.config.globalProperties.$http = axios;
   app.config.globalProperties.$utils = reactive(utils);
+
+  // Global Vue error handler – surface errors as non-blocking toast events
   app.config.errorHandler = (err) => {
-    console.log(err);
+    console.error('[ASLS Studio]', err);
     EventBus.emit('app_error', err);
   };
+
+  // Catch unhandled promise rejections and report them
+  window.addEventListener('unhandledrejection', (event) => {
+    console.error('[ASLS Studio] Unhandled rejection:', event.reason);
+    EventBus.emit('app_error', event.reason);
+  });
+
   app.use(router);
   app.mount('#app');
+
+  // Initialise MIDI in the background (non-blocking – will silently fail if
+  // the browser doesn't support Web MIDI or the user denies the permission).
+  MidiController.init().catch(() => {});
 } catch (err) {
-  console.log(err);
+  console.error('[ASLS Studio] Fatal startup error:', err);
 }

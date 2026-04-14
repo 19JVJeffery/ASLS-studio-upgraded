@@ -185,8 +185,23 @@ export default {
               },
             },
             {
-              name: 'Export Showfile',
+              name: 'Save to Server',
               shortcut: 'Ctrl+Shift+S',
+              icon: 'save',
+              callback: () => {
+                this.$show.persistToServer();
+              },
+            },
+            {
+              name: 'Download Showfile',
+              shortcut: 'Ctrl+D',
+              icon: 'export',
+              callback: () => {
+                this.downloadShowFile();
+              },
+            },
+            {
+              name: 'Export Showfile (Save As)',
               icon: 'export',
               callback: () => {
                 this.saveasPopupState = true;
@@ -325,6 +340,7 @@ export default {
       Shortcuts.register('Ctrl+Shift+Q', 'Open Cue Stack', () => { this.cuestackPopupState = true; });
       Shortcuts.register('Ctrl+Shift+O', 'Open Outputs', () => { this.connectionsPopupState = true; });
       Shortcuts.register('Ctrl+Shift+V', 'Open Visualizer settings', () => this.displayVisualizerPopup());
+      Shortcuts.register('Ctrl+D', 'Download show file', () => this.downloadShowFile());
       Shortcuts.mount();
 
       // Listen for remote control events from the server
@@ -400,6 +416,25 @@ export default {
      */
     saveLocal() {
       this.$show.persistLocally();
+    },
+    /**
+     * Download the current show as a JSON file to the user's desktop.
+     *
+     * @public
+     */
+    downloadShowFile() {
+      const data = JSON.stringify(this.$show.showData, null, 2);
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${this.$show.name || 'show'}.asls`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 100);
     },
     /**
      * Display visualizer popup
