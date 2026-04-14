@@ -20,11 +20,29 @@ const router = Router();
 
 // Public fixtures shipped with the app (inside /public/fixtures)
 const PUBLIC_FIXTURES = path.resolve(__dirname, '..', '..', 'public', 'fixtures');
-// User-imported fixtures in ~/.asls-studio/fixtures
-const USER_FIXTURES = path.join(os.homedir(), '.asls-studio', 'fixtures');
 
-if (!fs.existsSync(USER_FIXTURES)) {
-  fs.mkdirSync(USER_FIXTURES, { recursive: true });
+// User-imported fixtures are stored as entries in a single manifest file.
+// This avoids using user-supplied strings as filesystem path components.
+const USER_FIXTURES_DIR = path.join(os.homedir(), '.asls-studio');
+const USER_FIXTURES_MANIFEST = path.join(USER_FIXTURES_DIR, 'user-fixtures.json');
+
+if (!fs.existsSync(USER_FIXTURES_DIR)) {
+  fs.mkdirSync(USER_FIXTURES_DIR, { recursive: true });
+}
+
+/** Load the user-fixture manifest (a plain object keyed by "manufacturer/model"). */
+function loadManifest() {
+  if (fs.existsSync(USER_FIXTURES_MANIFEST)) {
+    try {
+      return JSON.parse(fs.readFileSync(USER_FIXTURES_MANIFEST, 'utf8'));
+    } catch (_) { /* corrupt – treat as empty */ }
+  }
+  return {};
+}
+
+/** Persist the user-fixture manifest to disk. */
+function saveManifest(manifest) {
+  fs.writeFileSync(USER_FIXTURES_MANIFEST, JSON.stringify(manifest, null, 2), 'utf8');
 }
 
 // ---------------------------------------------------------------------------
@@ -37,18 +55,15 @@ router.get('/', (req, res) => {
       ? JSON.parse(fs.readFileSync(listPath, 'utf8'))
       : {};
 
-    // Append user-imported manufacturers/models
-    const userMfrs = fs.readdirSync(USER_FIXTURES).filter(
-      (d) => fs.statSync(path.join(USER_FIXTURES, d)).isDirectory(),
-    );
-    userMfrs.forEach((mfr) => {
+    // Append user-imported manufacturers/models from the manifest
+    const manifest = loadManifest();
+    Object.keys(manifest).forEach((key) => {
+      const slash = key.indexOf('/');
+      if (slash < 0) return;
+      const mfr = key.slice(0, slash);
+      const model = key.slice(slash + 1);
       if (!publicList[mfr]) publicList[mfr] = [];
-      const models = fs.readdirSync(path.join(USER_FIXTURES, mfr))
-        .filter((f) => f.endsWith('.json'))
-        .map((f) => f.replace('.json', ''));
-      models.forEach((m) => {
-        if (!publicList[mfr].includes(m)) publicList[mfr].push(m);
-      });
+      if (!publicList[mfr].includes(model)) publicList[mfr].push(model);
     });
 
     res.json(publicList);
@@ -63,25 +78,31 @@ router.get('/', (req, res) => {
 router.get('/:manufacturer/:model', (req, res) => {
   const { manufacturer, model } = req.params;
   // Security: strip any path traversal and limit to safe filename characters
-  const safeMfr = path.basename(manufacturer).replace(/[^a-zA-Z0-9_\-]/g, '-');
-  const safeModel = path.basename(model).replace(/[^a-zA-Z0-9_\-]/g, '-').replace(/\.json$/, '');
+  const safeMfr = path.basename(manufacturer).replace(/[^a-zA-Z0-9_-]/g, '-');
+  const safeModel = path.basename(model).replace(/[^a-zA-Z0-9_-]/g, '-').replace(/\.json$/, '');
 
-  // Check public first, then user directory
-  for (const base of [PUBLIC_FIXTURES, USER_FIXTURES]) {
-    const fp = path.join(base, safeMfr, `${safeModel}.json`);
-    // Guard against directory traversal even after basename sanitisation
-    if (!fp.startsWith(base + path.sep) && fp !== base) {
-      continue; // eslint-disable-line no-continue
-    }
-    if (fs.existsSync(fp)) {
-      return res.json(JSON.parse(fs.readFileSync(fp, 'utf8')));
-    }
+  // Check user-imported manifest first (no filesystem path from user input)
+  const manifest = loadManifest();
+  const key = `${safeMfr}/${safeModel}`;
+  if (Object.prototype.hasOwnProperty.call(manifest, key)) {
+    return res.json(manifest[key]);
+  }
+
+  // Fall back to public fixtures (static paths only)
+  const fp = path.join(PUBLIC_FIXTURES, safeMfr, `${safeModel}.json`);
+  // Containment guard
+  if (!fp.startsWith(PUBLIC_FIXTURES + path.sep)) {
+    return res.status(400).json({ error: 'Invalid path' });
+  }
+  if (fs.existsSync(fp)) {
+    return res.json(JSON.parse(fs.readFileSync(fp, 'utf8')));
   }
   res.status(404).json({ error: 'Fixture not found' });
 });
 
 // ---------------------------------------------------------------------------
 // POST /api/fixtures/import  – body: OFL fixture JSON
+// Store the fixture data in the manifest JSON (user values never become paths)
 // ---------------------------------------------------------------------------
 router.post('/import', (req, res) => {
   try {
@@ -89,21 +110,19 @@ router.post('/import', (req, res) => {
     if (!fixture || typeof fixture.manufacturer !== 'string' || typeof fixture.name !== 'string') {
       return res.status(400).json({ error: 'Invalid OFL fixture JSON' });
     }
-    // Sanitise and validate: only allow characters that cannot form path components
-    const SAFE_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/;
+    // Sanitise for display/key use only – these values are stored as JSON keys, NOT as paths
     const mfr = fixture.manufacturer.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
     const model = fixture.name.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
 
+    const SAFE_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/;
     if (!SAFE_PATTERN.test(mfr) || !SAFE_PATTERN.test(model)) {
       return res.status(400).json({ error: 'Invalid manufacturer or model name' });
     }
 
-    // After validation, construct the paths from the now-verified safe components
-    const mfrDir = path.join(USER_FIXTURES, mfr);
-    const targetFile = path.join(mfrDir, `${model}.json`);
-
-    if (!fs.existsSync(mfrDir)) fs.mkdirSync(mfrDir, { recursive: true });
-    fs.writeFileSync(targetFile, JSON.stringify(fixture, null, 2));
+    // Write to the manifest (fixed filesystem path – no user value in the path)
+    const manifest = loadManifest();
+    manifest[`${mfr}/${model}`] = fixture;
+    saveManifest(manifest);
     res.json({ ok: true, manufacturer: mfr, model });
   } catch (err) {
     res.status(500).json({ error: err.message });
