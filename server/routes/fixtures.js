@@ -89,24 +89,18 @@ router.post('/import', (req, res) => {
     if (!fixture || typeof fixture.manufacturer !== 'string' || typeof fixture.name !== 'string') {
       return res.status(400).json({ error: 'Invalid OFL fixture JSON' });
     }
-    // Sanitise to only safe characters so the values cannot escape the target dir
+    // Sanitise and validate: only allow characters that cannot form path components
+    const SAFE_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/;
     const mfr = fixture.manufacturer.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
     const model = fixture.name.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
 
-    if (!mfr || !model) {
+    if (!SAFE_PATTERN.test(mfr) || !SAFE_PATTERN.test(model)) {
       return res.status(400).json({ error: 'Invalid manufacturer or model name' });
     }
 
-    // Resolve and verify the target paths stay inside USER_FIXTURES
-    const mfrDir = path.resolve(USER_FIXTURES, mfr);
-    const targetFile = path.resolve(mfrDir, `${model}.json`);
-
-    if (!mfrDir.startsWith(USER_FIXTURES + path.sep) && mfrDir !== USER_FIXTURES) {
-      return res.status(400).json({ error: 'Invalid path' });
-    }
-    if (!targetFile.startsWith(mfrDir + path.sep) && targetFile !== mfrDir) {
-      return res.status(400).json({ error: 'Invalid path' });
-    }
+    // After validation, construct the paths from the now-verified safe components
+    const mfrDir = path.join(USER_FIXTURES, mfr);
+    const targetFile = path.join(mfrDir, `${model}.json`);
 
     if (!fs.existsSync(mfrDir)) fs.mkdirSync(mfrDir, { recursive: true });
     fs.writeFileSync(targetFile, JSON.stringify(fixture, null, 2));
