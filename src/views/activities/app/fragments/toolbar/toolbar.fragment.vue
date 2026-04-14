@@ -9,6 +9,24 @@
     <p>{{ saveState ? "" : "*" }} {{ project }}</p>
     <uk-spacer />
 
+    <!-- GO / BACK cue stack controls -->
+    <uk-flex
+      center-both
+      class="cuestack_container"
+      title="Step back in cue stack (Backspace)"
+      @click="cueBack"
+    >
+      <h3>◀ BACK</h3>
+    </uk-flex>
+    <uk-flex
+      center-both
+      class="cuestack_container go_btn"
+      title="GO – advance to next cue (Enter)"
+      @click="cueGo"
+    >
+      <h3>GO ▶</h3>
+    </uk-flex>
+
     <uk-flex
       center-both
       class="bpm_container"
@@ -52,17 +70,21 @@
     <newshow-popup v-model="newProjectPopupState" />
     <saveas-popup v-model="saveasPopupState" />
     <connections-popup v-model="connectionsPopupState" />
+    <cuestack-popup v-model="cuestackPopupState" />
   </uk-flex>
 </template>
 
 <script>
 import EventBus from '@/plugins/eventbus';
+import Shortcuts from '@/plugins/shortcuts';
+import ServerWS from '@/plugins/server-ws';
 import VisualizerPopup from './_popups/popup.visualizer.vue';
 import LicensePopup from './_popups/popup.license.vue';
 import CreditsPopup from './_popups/popup.credits.vue';
 import NewshowPopup from './_popups/popup.newshow.vue';
 import SaveasPopup from './_popups/popup.saveas.vue';
 import ConnectionsPopup from './_popups/popup.connections.vue';
+import CuestackPopup from './_popups/popup.cuestack.vue';
 
 export default {
   name: 'ToolbarFragment',
@@ -77,6 +99,7 @@ export default {
     NewshowPopup,
     SaveasPopup,
     ConnectionsPopup,
+    CuestackPopup,
   },
   data() {
     return {
@@ -121,6 +144,10 @@ export default {
        * Save as popup state
        */
       saveasPopupState: false,
+      /**
+       * Cue stack popup state
+       */
+      cuestackPopupState: false,
       /**
        * I/O popup state
        */
@@ -203,10 +230,18 @@ export default {
             },
             {
               name: 'Outputs',
-              shortcut: 'Ctrl+Shift+o',
+              shortcut: 'Ctrl+Shift+O',
               icon: 'zoom',
               callback: () => {
                 this.connectionsPopupState = true;
+              },
+            },
+            {
+              name: 'Cue Stack',
+              shortcut: 'Ctrl+Shift+Q',
+              icon: 'mixer',
+              callback: () => {
+                this.cuestackPopupState = true;
               },
             },
           ],
@@ -280,11 +315,39 @@ export default {
     });
     EventBus.on('app_ready', () => {
       this.project = this.$show.name;
-      window.removeEventListener('keydown', this.handleKeydownEvent);
-      window.addEventListener('keydown', this.handleKeydownEvent);
+      // Use centralised shortcut registry
+      Shortcuts.register('Space', 'Play / Pause show', () => this.playPauseShow());
+      Shortcuts.register('Ctrl+S', 'Save show locally', () => this.saveLocal());
+      Shortcuts.register('Ctrl+Z', 'Undo', () => this.$show.undo());
+      Shortcuts.register('Ctrl+Y', 'Redo', () => this.$show.redo());
+      Shortcuts.register('Enter', 'Cue stack GO', () => this.cueGo());
+      Shortcuts.register('Backspace', 'Cue stack BACK', () => this.cueBack());
+      Shortcuts.register('Ctrl+Shift+Q', 'Open Cue Stack', () => { this.cuestackPopupState = true; });
+      Shortcuts.register('Ctrl+Shift+O', 'Open Outputs', () => { this.connectionsPopupState = true; });
+      Shortcuts.register('Ctrl+Shift+V', 'Open Visualizer settings', () => this.displayVisualizerPopup());
+      Shortcuts.mount();
+
+      // Listen for remote control events from the server
+      ServerWS.on('remote:go', () => this.cueGo());
+      ServerWS.on('remote:back', () => this.cueBack());
     });
   },
+  beforeUnmount() {
+    Shortcuts.unmount();
+  },
   methods: {
+    /**
+     * Advance the cue stack (GO).
+     */
+    cueGo() {
+      this.$show.cueStack.go();
+    },
+    /**
+     * Step the cue stack back (BACK).
+     */
+    cueBack() {
+      this.$show.cueStack.back();
+    },
     /**
      * Toggle between show's play & pause states
      */
@@ -337,20 +400,6 @@ export default {
      */
     saveLocal() {
       this.$show.persistLocally();
-    },
-    /**
-     * Keydown event handler
-     *
-     * @public
-     * @param {Object} e keydown event
-     */
-    handleKeydownEvent(e) {
-      switch (e.code) {
-        case 'Space':
-          this.playPauseShow();
-          break;
-        default: break;
-      }
     },
     /**
      * Display visualizer popup
@@ -407,10 +456,25 @@ export default {
 .header_menu,
 .bpm_container,
 .tap_container,
-.state_container {
+.state_container,
+.cuestack_container {
   height: 100%;
   padding: 0 16px;
   border-left: 1px solid var(--primary-dark);
+}
+.cuestack_container {
+  min-width: 80px;
+  cursor: pointer;
+  user-select: none;
+}
+.cuestack_container:hover {
+  background: var(--secondary-darker);
+}
+.cuestack_container:active {
+  background: var(--secondary-dark) !important;
+}
+.go_btn h3 {
+  color: var(--accent-sea-green);
 }
 .state_container{
   width: 100px;

@@ -93,15 +93,21 @@ export default {
   },
   methods: {
     /**
-     * Setup App. Loads show from local storage or creates new
-     * show project if no local data is available
+     * Setup App. Tries server persistence first, then localStorage, then demo.
      *
      * @public
      */
     async setup() {
-      const localLoadingSucceeded = await this.$show.loadFromLocalStorage();
+      // 1. Try server persistence (backend running)
+      let loaded = await this.$show.loadFromServer();
 
-      if (!localLoadingSucceeded) {
+      // 2. Fall back to localStorage
+      if (!loaded) {
+        loaded = await this.$show.loadFromLocalStorage();
+      }
+
+      // 3. Fall back to demo show
+      if (!loaded) {
         const res = await fetch('/demo/showfiles/demo.showfile.json');
         const showData = await res.json();
         await this.$show.loadFromData(showData);
