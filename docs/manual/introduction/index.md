@@ -9,7 +9,7 @@ Just want to try it out? Skip to the [Live Browser Demo](https://asls.io/studio/
 </div>
 
 :::warning
-The current distribution of [ASLS Studio](https://asls.io/studio) is in beta status. Listed features are provided as-is, without any guarantee. Please report any issue over the [project's repository](https://github.com/ASLS-org/studio). 
+The current distribution of [ASLS Studio](https://asls.io/studio) is in beta status. Listed features are provided as-is, without any guarantee. Please report any issue over the [project's repository](https://github.com/19JVJeffery/ASLS-studio-upgraded). 
 
 :::
 

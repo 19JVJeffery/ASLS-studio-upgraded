@@ -7,12 +7,12 @@
   <a href="https://madewithvuejs.com/p/asls-studio/shield-link" target="_blank">
     <img src="https://madewithvuejs.com/storage/repo-shields/4381-shield.svg" alt="MadeWithVueJs.com shield" />
   </a>
-  <a href="https://github.com/ASLS-org/studio/?tab=GPL-3.0-1-ov-file" target="_blank">
-    <img src="https://img.shields.io/github/license/asls-org/studio" alt="License" />
+  <a href="https://github.com/19JVJeffery/ASLS-studio-upgraded/?tab=GPL-3.0-1-ov-file" target="_blank">
+    <img src="https://img.shields.io/github/license/19JVJeffery/ASLS-studio-upgraded" alt="License" />
   </a>
   </a>
-  <a href="https://github.com/ASLS-org/studio/releases" target="_blank">
-    <img src="https://img.shields.io/github/v/tag/asls-org/studio?include_prereleases&sort=semver&style=flat&label=version" alt="Version" />
+  <a href="https://github.com/19JVJeffery/ASLS-studio-upgraded/releases" target="_blank">
+    <img src="https://img.shields.io/github/v/tag/19JVJeffery/ASLS-studio-upgraded?include_prereleases&sort=semver&style=flat&label=version" alt="Version" />
   </a>
 </p>
 
@@ -32,7 +32,7 @@ Full software documentation is available at [studio.asls.io](http://studio.asls.
 
 ### Software
 - Operating System: Any OS supporting the required software
-- Node.js: v16.15.1 or higher
+- Node.js: v18.0 or higher
 - Browser: Latest version of Chrome, Firefox, or Opera
 
 ## Installation Process
@@ -42,13 +42,13 @@ Full software documentation is available at [studio.asls.io](http://studio.asls.
    Open a terminal and navigate to your desired installation directory. Then run:
 
    ```
-   git clone https://github.com/ASLS-org/studio
+   git clone https://github.com/19JVJeffery/ASLS-studio-upgraded
    ```
 
 2. **Navigate to Project Directory**
 
    ```
-   cd studio
+   cd ASLS-studio-upgraded
    ```
 
 3. **Install Dependencies**
@@ -85,4 +85,4 @@ To create a production build:
 
 ## Troubleshooting
 
-If you encounter any issues during installation or usage, please report them on the [ASLS Studio GitHub repository](https://github.com/ASLS-org/studio/issues).
+If you encounter any issues during installation or usage, please report them on the [ASLS Studio GitHub repository](https://github.com/19JVJeffery/ASLS-studio-upgraded/issues).

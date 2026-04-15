@@ -7,11 +7,11 @@
   <a href="https://madewithvuejs.com/p/asls-studio/shield-link" target="_blank">
     <img src="https://madewithvuejs.com/storage/repo-shields/4381-shield.svg" alt="MadeWithVueJs.com shield" />
   </a>
-  <a href="https://github.com/ASLS-org/studio/?tab=GPL-3.0-1-ov-file" target="_blank">
-    <img src="https://img.shields.io/github/license/asls-org/studio" alt="License" />
+  <a href="https://github.com/19JVJeffery/ASLS-studio-upgraded/?tab=GPL-3.0-1-ov-file" target="_blank">
+    <img src="https://img.shields.io/github/license/19JVJeffery/ASLS-studio-upgraded" alt="License" />
   </a>
-  <a href="https://github.com/ASLS-org/studio/releases" target="_blank">
-    <img src="https://img.shields.io/github/v/tag/asls-org/studio?include_prereleases&sort=semver&style=flat&label=version" alt="Version" />
+  <a href="https://github.com/19JVJeffery/ASLS-studio-upgraded/releases" target="_blank">
+    <img src="https://img.shields.io/github/v/tag/19JVJeffery/ASLS-studio-upgraded?include_prereleases&sort=semver&style=flat&label=version" alt="Version" />
   </a>
 </p>
 
@@ -20,7 +20,7 @@
 ASLS Studio is a locally-hosted, web-based lighting control system built with Vue 3.  
 It supports multiple DMX output protocols, a full cue-stack workflow, BPM-sync effect engine, OSC/MIDI input, and filesystem-based show persistence — all served from a Node.js backend that runs on your show computer.
 
-> **Warning**: ASLS Studio is in early beta. Features are provided as-is. Report issues on the [GitHub repository](https://github.com/ASLS-org/studio/issues).
+> **Warning**: ASLS Studio is in early beta. Features are provided as-is. Report issues on the [GitHub repository](https://github.com/19JVJeffery/ASLS-studio-upgraded/issues).
 
 Full documentation is available at [studio.asls.io](https://studio.asls.timekadel.com).
 
@@ -59,8 +59,8 @@ Full documentation is available at [studio.asls.io](https://studio.asls.timekade
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/ASLS-org/studio
-cd studio
+git clone https://github.com/19JVJeffery/ASLS-studio-upgraded
+cd ASLS-studio-upgraded
 
 # 2. Install dependencies (includes backend packages)
 npm install
@@ -296,5 +296,5 @@ Use **File → Save As** to download the current show as a JSON file.
 | MIDI not detected | Use Chrome; accept the Web MIDI permission prompt |
 | Show not persisted | Start the backend server (`npm run server`); check `~/.asls-studio/shows/` |
 
-For other issues, please open a ticket on the [GitHub repository](https://github.com/ASLS-org/studio/issues).
+For other issues, please open a ticket on the [GitHub repository](https://github.com/19JVJeffery/ASLS-studio-upgraded/issues).
 
