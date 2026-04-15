@@ -110,8 +110,13 @@ export default {
       if (!loaded) {
         const base = import.meta.env.BASE_URL.replace(/\/$/, '');
         const res = await fetch(`${base}/demo/showfiles/demo.showfile.json`);
-        const showData = await res.json();
-        await this.$show.loadFromData(showData);
+        if (!res.ok) {
+          EventBus.emit('app_error', new Error(`Failed to load demo show (${res.status})`));
+          return;
+        } else {
+          const showData = await res.json();
+          await this.$show.loadFromData(showData);
+        }
       }
 
       await this.$router.push('/universe/0');

@@ -41,7 +41,7 @@ jobs:
         env:
           # Set the base path to match the GitHub Pages deployment URL
           # (e.g. /ASLS-studio-upgraded/ for a project page).
-          VITE_BASE_URL: ${{ steps.pages.outputs.base_path }}/
+          VITE_BASE_URL: ${{ steps.pages.outputs.base_path == '/' && '/' || format('{0}/', steps.pages.outputs.base_path) }}
           # Enables demo mode: uses hash-based routing and skips the
           # WebSocket connection to the backend server.
           VITE_DEMO_MODE: 'true'
