@@ -28,6 +28,10 @@ try {
   app.config.globalProperties.$http = axios;
   app.config.globalProperties.$utils = reactive(utils);
 
+  // Prefix all relative axios requests with the app's base path so that
+  // sub-path deployments (e.g. GitHub Pages) resolve assets correctly.
+  axios.defaults.baseURL = import.meta.env.BASE_URL;
+
   // Global Vue error handler – surface errors as non-blocking toast events
   app.config.errorHandler = (err) => {
     console.error('[ASLS Studio]', err);

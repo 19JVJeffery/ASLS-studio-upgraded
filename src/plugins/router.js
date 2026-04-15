@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router';
+import { createRouter, createWebHistory, createWebHashHistory } from 'vue-router';
 import ShowSingleton from '@/singletons/show.singleton';
 import {
   ProxifySingleton,
@@ -49,7 +49,9 @@ const routes = [{
 }];
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: import.meta.env.VITE_DEMO_MODE === 'true'
+    ? createWebHashHistory(import.meta.env.BASE_URL)
+    : createWebHistory(import.meta.env.BASE_URL),
   routes,
 });
 
