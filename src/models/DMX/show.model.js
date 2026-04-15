@@ -5,6 +5,7 @@ import {
 import {
   parseStringPromise as XMLParse,
 } from 'xml2js';
+import ServerWS from '@/plugins/server-ws';
 import {
   ProxifySingleton,
 } from '../utils/proxify.utils';
@@ -15,10 +16,13 @@ import UniversePool from './universe.pool.model';
 import FixturePool from './fixture.pool.model';
 import Live from './live.model';
 import OutputPool from './output.pool.model';
+import CueStack from './cuestack.model';
 
 const LOCALSTORAGE_SHOWFILE_KEY = 'ASLS_STUDIO_SHOWFILE';
 const DEFAULT_PROJECT_NAME = 'new_project.asls';
 const DEFAULT_BPM_VALUE = 120;
+/** Current show-file schema version for migration support */
+const SHOWFILE_VERSION = 2;
 
 const SHOWFILE_EXTENSIONS = {
   QLC: 'qxw',
@@ -28,11 +32,30 @@ const SHOWFILE_EXTENSIONS = {
 const fixtureDataCache = {};
 
 /**
+ * Migrate show data from older schema versions to the current one.
+ *
+ * @param {Object} data - raw show data
+ * @returns {Object} migrated data
+ */
+function migrateShowData(data) {
+  const d = { ...data };
+  const version = d._version || 1;
+
+  if (version < 2) {
+    // v1 → v2: cueStack field added at show level
+    if (!d.cueStack) {
+      d.cueStack = { id: 0, name: 'Main Stack', entries: [] };
+    }
+    d._version = 2;
+  }
+
+  return d;
+}
+
+/**
  * Storage for show definitions
- * TODO: Refactor and document.
  *
  * @class Show
- * @todo Refactor whole class. it's messy
  * @extends {EventEmitter}
  */
 class Show extends EventEmitter {
@@ -49,6 +72,7 @@ class Show extends EventEmitter {
     this.groupPool = new GroupPool();
     this.master = new Master(this.groupPool);
     this.outputPool = new OutputPool();
+    this.cueStack = new CueStack({ id: 0, name: 'Main Stack' });
     this.running = false;
     this.slave = false;
     this.selectedOutputs = [];
@@ -91,6 +115,7 @@ class Show extends EventEmitter {
 
   get showData() {
     return {
+      _version: SHOWFILE_VERSION,
       name: this.name,
       bpm: this.bpm,
       fixtures: this.fixturePool.fixtures.map((f) => f.showData),
@@ -98,6 +123,7 @@ class Show extends EventEmitter {
       groups: this.groupPool.groups.map((g) => g.showData),
       visualizer: this.visualizerHandle.showData,
       outputs: this.outputPool.showData,
+      cueStack: this.cueStack.showData,
     };
   }
 
@@ -187,14 +213,54 @@ class Show extends EventEmitter {
   }
 
   /**
-   * Persist show data in localstorage
+   * Persist show data in localstorage AND on the server filesystem (if available).
    *
    * @public
    */
   persistLocally() {
-    localStorage.setItem(LOCALSTORAGE_SHOWFILE_KEY, JSON.stringify(this.showData));
+    const data = this.showData;
+    localStorage.setItem(LOCALSTORAGE_SHOWFILE_KEY, JSON.stringify(data));
+    // Also push to server for filesystem persistence
+    ServerWS.saveShow(this.name, data);
     this.isSaved = true;
     this.emit('saveState', this.isSaved);
+  }
+
+  /**
+   * Persist show data to the server via REST API.
+   * Falls back to localStorage-only if the server is not running.
+   *
+   * @public
+   * @async
+   */
+  async persistToServer() {
+    const data = this.showData;
+    try {
+      await axios.post('/api/shows', { name: this.name, data });
+    } catch (_) {
+      // Server not running – fall back to localStorage
+    }
+    localStorage.setItem(LOCALSTORAGE_SHOWFILE_KEY, JSON.stringify(data));
+    this.isSaved = true;
+    this.emit('saveState', this.isSaved);
+  }
+
+  /**
+   * Load the most recent show from the server, falling back to localStorage.
+   *
+   * @public
+   * @async
+   * @returns {Boolean} Whether a show was found and loaded
+   */
+  async loadFromServer() {
+    try {
+      const res = await axios.get('/api/shows/current');
+      if (res.data && res.data.data) {
+        await this.loadFromData(res.data.data);
+        return true;
+      }
+    } catch (_) { /* server not running */ }
+    return false;
   }
 
   /**
@@ -280,6 +346,7 @@ class Show extends EventEmitter {
     this.universePool.clearAll();
     this.fixturePool.clearAll(true);
     this.outputPool.clearAll();
+    this.cueStack = new CueStack({ id: 0, name: 'Main Stack' });
     this.name = '';
     this.isSaved = true;
     this.bpm = DEFAULT_BPM_VALUE;
@@ -357,11 +424,14 @@ class Show extends EventEmitter {
   /**
    * Prepares and sets up a show from provided show data configuration
    *
-   * @param {Object} showData raw show configuration data to be parsed/loaded
+   * @param {Object} rawShowData raw show configuration data to be parsed/loaded
    * @public
    * @async
    */
-  async loadFromData(showData) {
+  async loadFromData(rawShowData) {
+    // Migrate legacy show files to the current schema
+    const showData = migrateShowData(rawShowData);
+
     this.loading.state = true;
     this.loading.message = 'Clearing Show Data';
     this.loading.percentage = 20;
@@ -386,12 +456,16 @@ class Show extends EventEmitter {
     await this.prepareUniverses(showData);
 
     this.loading.message = 'Loading groups data';
-    this.loading.percentage = 90;
+    this.loading.percentage = 85;
     this.prepareGroups(showData);
 
     this.loading.message = 'Loading outputs';
     this.loading.percentage = 90;
     this.prepareOutputs(showData);
+
+    this.loading.message = 'Loading cue stack';
+    this.loading.percentage = 93;
+    this.prepareCueStack(showData);
 
     this.loading.message = 'Finalizing';
     this.loading.percentage = 95;
@@ -423,6 +497,33 @@ class Show extends EventEmitter {
   }
 
   /**
+   * Reconstructs the cue stack from show data.
+   *
+   * @param {Object} showData
+   * @public
+   */
+  prepareCueStack(showData) {
+    if (!showData.cueStack) return;
+    this.cueStack = new CueStack({
+      id: showData.cueStack.id ?? 0,
+      name: showData.cueStack.name ?? 'Main Stack',
+    });
+    if (showData.cueStack.entries) {
+      showData.cueStack.entries.forEach((entry) => {
+        try {
+          const group = this.groupPool.getFromId(entry.groupId);
+          const cue = group.cuePool.getFromId(entry.cueId);
+          this.cueStack.addEntry({
+            ...entry,
+            cue,
+            groupId: entry.groupId,
+          });
+        } catch (_) { /* cue no longer exists – skip */ }
+      });
+    }
+  }
+
+  /**
    * Preloads fixture library from provided fixture list configuration
    *
    * @public
@@ -432,7 +533,8 @@ class Show extends EventEmitter {
    */
   async preloadFixtureList() {
     try {
-      const res = await axios.get('/fixtures/fixture_list.json');
+      // Try the server API first (supports user-imported fixtures)
+      const res = await axios.get('/api/fixtures').catch(() => axios.get('/fixtures/fixture_list.json'));
       this.rawOFLFixtures = res.data;
     } catch (err) {
       console.log('could not fetch fixture list.');
@@ -473,11 +575,9 @@ class Show extends EventEmitter {
   }
 
   /**
-   * Parses QLC showfile
+   * Parses QLC+ showfile (.qxw) with full scene/function import.
    *
-   * @todo Implement QLC parsing better
-   *
-   * @param {File} showFile handle to QLC showfile
+   * @param {string} showFile - raw XML string of the QLC+ workspace file
    * @static
    * @async
    */
@@ -485,31 +585,87 @@ class Show extends EventEmitter {
     let parsed = await XMLParse(showFile);
     // eslint-disable-next-line prefer-destructuring
     parsed = parsed.Workspace.Engine[0];
-    const showData = {
-      universes: parsed.InputOutputMap[0].Universe.map((universe) => ({
-        id: universe.$.ID,
-        name: universe.$.Name,
-      })),
-      fixtures: parsed.Fixture.map((fixtureData) => ({
+
+    const fixtureIdMap = {}; // QLC fixture ID → ASLS fixture index
+    const fixtures = (parsed.Fixture || []).map((fixtureData, idx) => {
+      const id = Number(fixtureData.ID[0]);
+      fixtureIdMap[id] = idx;
+      return {
         manufacturer: fixtureData.Manufacturer[0].replace(/\s/g, '-').toLowerCase(),
         model: fixtureData.Model[0].replace(/\s/g, '-').toLowerCase(),
         mode: fixtureData.Mode[0],
-        id: fixtureData.ID[0],
-        chStart: fixtureData.Address[0],
-        universe: fixtureData.Universe[0],
-      })),
-      functions: {
-        scenes: parsed.Function.filter((fun) => fun.$.Type === 'Scene').map((sceneData) => ({
-          name: sceneData.$.Name,
-          id: sceneData.$.ID,
-          fixtures: sceneData.FixtureVal.map((fixtureVal) => ({
-            id: fixtureVal.$.ID,
-            values: fixtureVal._ ? fixtureVal._.split(',') : [],
-          })),
+        id: idx,
+        chStart: Number(fixtureData.Address[0]),
+        universe: Number(fixtureData.Universe[0]),
+      };
+    });
+
+    const universes = (parsed.InputOutputMap?.[0]?.Universe || []).map((universe) => ({
+      id: Number(universe.$.ID),
+      name: universe.$.Name,
+    }));
+
+    // Build ASLS-compatible groups from QLC+ Scene functions.
+    // Each QLC+ scene becomes an ASLS cue inside a single group per scene.
+    const qlcFunctions = parsed.Function || [];
+    const scenes = qlcFunctions
+      .filter((fn) => fn.$.Type === 'Scene')
+      .map((sceneData) => ({
+        name: sceneData.$.Name,
+        id: Number(sceneData.$.ID),
+        fixtures: (sceneData.FixtureVal || []).map((fv) => ({
+          qlcId: Number(fv.$.ID),
+          values: fv._ ? fv._.split(',').map(Number) : [],
         })),
-      },
+      }));
+
+    // Build a single group containing one cue per scene
+    const groups = scenes.length > 0 ? [{
+      id: 0,
+      name: 'Imported Scenes',
+      fixtures: fixtures.map((f) => ({ id: f.id })),
+      cues: scenes.map((scene, i) => ({
+        id: i,
+        type: 0, // Scene
+        name: scene.name,
+        duration: 1,
+        triggerStyle: 0,
+        loopStyle: 0,
+        relative: 0,
+        fadeIn: { type: 0, duration: 1 },
+        fadeOut: { type: 0, duration: 1 },
+        fixtures: fixtures.map((f) => f.id),
+        fixtureValues: scene.fixtures.map((fv) => {
+          const fixtureIndex = fixtureIdMap[fv.qlcId];
+          if (fixtureIndex === undefined) return null;
+          const fixture = fixtures[fixtureIndex];
+          return {
+            fixture: { id: fixture.id },
+            channelValues: fv.values.map((value, chIdx) => ({
+              id: chIdx + 1,
+              type: 'Intensity',
+              value,
+              active: value > 0,
+            })),
+          };
+        }).filter(Boolean),
+      })),
+      chases: [],
+      solo: false,
+      disabled: false,
+      master: 255,
+    }] : [];
+
+    return {
+      _version: SHOWFILE_VERSION,
+      name: 'QLC+ Import',
+      bpm: 120,
+      fixtures,
+      universes,
+      groups,
+      outputs: [],
+      cueStack: { id: 0, name: 'Main Stack', entries: [] },
     };
-    return showData;
   }
 
   /**

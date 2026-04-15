@@ -39,6 +39,7 @@ const pathSegments = path.dirname(filename);
 export default defineConfig(async () => {
   try {
     await prepareVersioningEnv();
+    const SERVER_PORT = process.env.SERVER_PORT || 3000;
     return {
       plugins: [vue(), svgLoader()],
       resolve: {
@@ -47,6 +48,25 @@ export default defineConfig(async () => {
           '@root': path.resolve(pathSegments, './'),
         },
         extensions: ['.mjs', '.js', '.ts', '.jsx', '.tsx', '.json', '.vue'],
+      },
+      server: {
+        proxy: {
+          // Proxy REST API calls to the local backend during development
+          '/api': {
+            target: `http://localhost:${SERVER_PORT}`,
+            changeOrigin: true,
+          },
+          // Proxy remote control endpoint
+          '/remote': {
+            target: `http://localhost:${SERVER_PORT}`,
+            changeOrigin: true,
+          },
+          // Proxy WebSocket connection to the backend
+          '/ws': {
+            target: `ws://localhost:${SERVER_PORT}`,
+            ws: true,
+          },
+        },
       },
     };
   } catch (err) {

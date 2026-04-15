@@ -56,7 +56,8 @@
         >
           <uk-flex gap="10">
             <uk-select-input
-              :options="['WSC (Web Show Control)']"
+              v-model="formOutput.protocol"
+              :options="['WSC (Web Show Control)', 'Art-Net', 'sACN (E1.31)', 'Virtual (Visualizer only)']"
               label="Type / Protocol"
               :disabled="!selectedOutput"
             />
@@ -196,6 +197,7 @@ export default {
         port: 0,
         name: '',
         universe: 0,
+        protocol: 'WSC (Web Show Control)',
       },
       selectedOutput: null,
       selectedOutputIndex: 0,

@@ -3,6 +3,7 @@ import {
   Proxify,
 } from '../utils/proxify.utils';
 import Cue, { CUE_LOOP_STYLES } from './cue.model';
+import Live from './live.model';
 
 /**
  * Available color channels
@@ -30,6 +31,7 @@ const FX_CHANNEL_WAVEFORMS = {
   TRIANGLE: 1,
   SQUARE: 2,
   PWM: 3,
+  STROBE: 4,
 };
 /**
  * Effect channel direction enumeration
@@ -58,6 +60,8 @@ const DEFAULT_FXCHANNEL_DATA = {
   MAX: 255,
   FREQUENCY: 1,
   PHASE: 0,
+  BPM_SYNC: false,
+  BPM_MULTIPLIER: 1, // beats per cycle
   FIXTURE_PHASE: {
     START: 0,
     STOP: 360,
@@ -323,6 +327,8 @@ class FXChannel extends Proxify {
     this.min = channel.min;
     this.frequency = channel.frequency;
     this.phase = channel.phase;
+    this.bpmSync = channel.bpmSync ?? DEFAULT_FXCHANNEL_DATA.BPM_SYNC;
+    this.bpmMultiplier = channel.bpmMultiplier ?? DEFAULT_FXCHANNEL_DATA.BPM_MULTIPLIER;
     this.fixturePhaseStart = channel.fixturePhaseStart;
     this.fixturePhaseStop = channel.fixturePhaseStop;
     this.time = 0;
@@ -518,7 +524,21 @@ class FXChannel extends Proxify {
    * @type {Number}
    */
   get period() {
-    return 1 / this.frequency;
+    return 1 / this.effectFrequency;
+  }
+
+  /**
+   * Effective frequency in Hz. When bpmSync is enabled, the frequency is
+   * derived from the current Live BPM and the bpmMultiplier (beats per cycle).
+   *
+   * @readonly
+   * @type {Number}
+   */
+  get effectFrequency() {
+    if (this.bpmSync) {
+      return (Live.bpm / 60) * this.bpmMultiplier;
+    }
+    return this.frequency;
   }
 
   /**
@@ -618,6 +638,8 @@ class FXChannel extends Proxify {
       min: this.min,
       frequency: this.frequency,
       phase: this.phase,
+      bpmSync: this.bpmSync,
+      bpmMultiplier: this.bpmMultiplier,
       fixturePhaseStart: this.fixturePhaseStart,
       fixturePhaseStop: this.fixturePhaseStop,
     };
@@ -758,7 +780,7 @@ class FXChannel extends Proxify {
     return (
       this.average
       + this.amplitude
-      * Math.sin(2 * Math.PI * this.frequency * t + this.phaseRad + phaseOffset)
+      * Math.sin(2 * Math.PI * this.effectFrequency * t + this.phaseRad + phaseOffset)
     );
   }
 
@@ -774,8 +796,22 @@ class FXChannel extends Proxify {
     return (
       this.average
       + ((2 * this.amplitude) / Math.PI)
-      * Math.asin(Math.sin(2 * Math.PI * this.frequency * t + this.phaseRad + phaseOffset))
+      * Math.asin(Math.sin(2 * Math.PI * this.effectFrequency * t + this.phaseRad + phaseOffset))
     );
+  }
+
+  /**
+   * Return strobe pulse value – max on a narrow duty cycle, 0 otherwise.
+   *
+   * @public
+   * @param {Number} t
+   * @param {Number} [phaseOffset=0]
+   * @return {Number} strobe value (0 or max)
+   */
+  genStrobe(t, phaseOffset = 0) {
+    const angle = (2 * Math.PI * this.effectFrequency * t) + this.phaseRad + phaseOffset;
+    const phase = ((angle % (2 * Math.PI)) + (2 * Math.PI)) % (2 * Math.PI);
+    return phase < 0.3 ? this.max : 0;
   }
 
   /**
@@ -794,6 +830,8 @@ class FXChannel extends Proxify {
         return this.genTriangle(t, phaseOffset);
       case FX_CHANNEL_WAVEFORMS.SQUARE:
         return this.genSine(t, phaseOffset) >= this.average ? this.max : this.min;
+      case FX_CHANNEL_WAVEFORMS.STROBE:
+        return this.genStrobe(t, phaseOffset);
       default:
         return 1;
     }

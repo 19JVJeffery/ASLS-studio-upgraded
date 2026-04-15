@@ -1,8 +1,20 @@
 import WebShowSclient from '@/plugins/webshow';
+import ServerOutput from '@/plugins/server-output';
+
+/**
+ * Output type identifiers.
+ *
+ * @enum {string}
+ */
+export const OUTPUT_TYPES = {
+  WSC: 'WSC (Web Show Control)',
+  ARTNET: 'Art-Net',
+  SACN: 'sACN (E1.31)',
+  VIRTUAL: 'Virtual (Visualizer only)',
+};
 
 /**
  * @class OutputPool
- * @extends {Proxify}
  * @classdesc Pool of output instances
  */
 class OutputPool {
@@ -12,7 +24,7 @@ class OutputPool {
   }
 
   /**
-   * Ouputs exportable show data chunk
+   * Outputs exportable show data chunk
    *
    * @readonly
    * @type {Object}
@@ -25,13 +37,13 @@ class OutputPool {
       remote: output.remote,
       port: output.port,
       universe: output.universe.id,
+      protocol: output.protocol ?? OUTPUT_TYPES.WSC,
     }));
   }
 
   /**
    * Pool's listable data
    *
-   * @todo remove this ? Am I even using it ?
    * @readonly
    * @type {Array}
    */
@@ -64,21 +76,43 @@ class OutputPool {
   }
 
   /**
-   * Creates a new output instance from provided configuraion data and pushes it to the pool
+   * Creates a new output instance from provided configuration data and pushes it to the pool.
+   * Supports both legacy WSC outputs and new server-backed protocol outputs.
    *
    * @public
    * @param {Object} outputData output configuration object
+   * @param {string} [outputData.protocol] – output protocol type
    * @return {Object} Output instance
-   * @see Output
    */
   addRaw(outputData = {}) {
     try {
-      const output = new WebShowSclient(
-        outputData.remote,
-        outputData.port,
-        outputData.universe,
-        outputData.name,
-      );
+      const protocol = outputData.protocol ?? OUTPUT_TYPES.WSC;
+      let output;
+
+      if (protocol === OUTPUT_TYPES.WSC) {
+        // Legacy WebRTC-based transport
+        output = new WebShowSclient(
+          outputData.remote,
+          outputData.port,
+          outputData.universe,
+          outputData.name,
+        );
+      } else {
+        // Server-backed transport (Art-Net, sACN, Virtual all route through the backend)
+        let universeIndex = 0;
+        if (outputData.universe) {
+          universeIndex = typeof outputData.universe === 'object'
+            ? outputData.universe.id
+            : outputData.universe;
+        }
+        output = new ServerOutput(outputData.universe, universeIndex, outputData.name);
+        output.remote = outputData.remote ?? '127.0.0.1';
+        output.port = outputData.port ?? 3000;
+        output.protocol = protocol;
+        output.color = outputData.color;
+        output.debug = output.debug ?? [];
+      }
+
       output.id = this.genOutputId();
       output._animationId = null;
       this.outputs.push(output);
@@ -98,7 +132,9 @@ class OutputPool {
   delete(output) {
     const outputIndex = this.outputs.findIndex((item) => item.id === output.id);
     if (outputIndex > -1) {
-      this.outputs[outputIndex].handleClosure();
+      if (typeof this.outputs[outputIndex].handleClosure === 'function') {
+        this.outputs[outputIndex].handleClosure();
+      }
       this.outputs.splice(outputIndex, 1);
     } else {
       throw new Error('Could not find output in output pool');
