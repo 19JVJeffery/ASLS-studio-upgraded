@@ -127,6 +127,9 @@ const ServerWS = new ServerWSClient();
 
 // Auto-connect when the module loads (the server may not be running in
 // pure dev mode, so failures are silently recovered via auto-reconnect).
-ServerWS.connect();
+// Skip in demo mode (e.g. GitHub Pages) where there is no backend.
+if (import.meta.env.VITE_DEMO_MODE !== 'true') {
+  ServerWS.connect();
+}
 
 export default ServerWS;

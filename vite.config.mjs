@@ -41,6 +41,7 @@ export default defineConfig(async () => {
     await prepareVersioningEnv();
     const SERVER_PORT = process.env.SERVER_PORT || 3000;
     return {
+      base: process.env.VITE_BASE_URL || '/',
       plugins: [vue(), svgLoader()],
       resolve: {
         alias: {

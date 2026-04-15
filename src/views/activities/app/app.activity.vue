@@ -108,7 +108,7 @@ export default {
 
       // 3. Fall back to demo show
       if (!loaded) {
-        const res = await fetch('/demo/showfiles/demo.showfile.json');
+        const res = await fetch(`${import.meta.env.BASE_URL}demo/showfiles/demo.showfile.json`);
         const showData = await res.json();
         await this.$show.loadFromData(showData);
       }
